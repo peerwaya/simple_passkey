@@ -3,6 +3,7 @@ package app.gotok.simple_passkey;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Build;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -79,6 +80,7 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
         if (call.method.equals("createPassKey")) {
             String json = (String) call.argument("json");
+            Log.d("PASSKEY", json);
             Boolean preferImmediatelyAvailableCredentials = (Boolean) call.argument("preferImmediatelyAvailableCredentials");
             byte[] clientDataHash = (byte[]) call.argument("clientDataHash");
             this.createPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials != null ? preferImmediatelyAvailableCredentials : false, result);
@@ -99,16 +101,16 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
     }
 
     public void createPasskey(String requestJson, @Nullable byte[] clientDataHash, boolean preferImmediatelyAvailableCredentials, @NonNull Result result) {
-        CredentialManager credentialManager = CredentialManager.create(context);
+        CredentialManager credentialManager = CredentialManager.create(activity);
         CreatePublicKeyCredentialRequest createPublicKeyCredentialRequest =
                 new CreatePublicKeyCredentialRequest(
                         requestJson, clientDataHash, preferImmediatelyAvailableCredentials);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             credentialManager.createCredentialAsync(
-                    context,
+                    activity,
                     createPublicKeyCredentialRequest,
                     null,
-                    context.getMainExecutor(),
+                    activity.getMainExecutor(),
                     new CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>() {
                         @Override
                         public void onResult(CreateCredentialResponse createCredentialResponse) {
@@ -147,7 +149,7 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
     }
 
     public void getPasskey(String requestJson, @Nullable byte[] clientDataHash, @NonNull Result result) {
-        CredentialManager credentialManager = CredentialManager.create(context);
+        CredentialManager credentialManager = CredentialManager.create(activity);
         GetPublicKeyCredentialOption getPublicKeyCredentialOption =
                 new GetPublicKeyCredentialOption(requestJson, clientDataHash);
         GetCredentialRequest getCredRequest = new GetCredentialRequest.Builder()
@@ -155,10 +157,10 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
                 .build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             credentialManager.getCredentialAsync(
-                    context,
+                    activity,
                     getCredRequest,
                     null,
-                    context.getMainExecutor(),
+                    activity.getMainExecutor(),
                     new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
                         @Override
                         public void onResult(GetCredentialResponse getCredentialResponse) {

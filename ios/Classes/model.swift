@@ -14,7 +14,6 @@ struct PublicKeyCredentialCreationOptions: Codable {
     let excludeCredentials: [PublicKeyCredentialDescriptor]?
     let authenticatorSelection: AuthenticatorSelectionCriteria?
     let attestation: AttestationConveyancePreference?
-    let extensions: Bool?
 }
 
 struct PublicKeyCredentialRpEntity: Codable {
@@ -81,7 +80,7 @@ struct AuthenticationResponseJSON: Codable {
 
 struct AuthenticatorAssertionResponseJSON: Codable {
     let clientDataJSON: Base64URLString
-    let authenticatorData: Base64URLString
+    let authenticatorData: Base64URLString?
     let signature: Base64URLString
     let userHandle: Base64URLString?
 }

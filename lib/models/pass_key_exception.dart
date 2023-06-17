@@ -1,17 +1,9 @@
-import 'package:json_annotation/json_annotation.dart';
-
 enum ErrorCode {
-  @JsonValue("credential_dom_exception")
   credentialDomException,
-  @JsonValue("user_canceled")
   userCanceled,
-  @JsonValue("platform_canceled")
   platformCanceled,
-  @JsonValue("invalid_argument")
   invalidArgument,
-  @JsonValue("retry")
   retry,
-  @JsonValue("missing_configuration")
   missingConfiguration,
   unsupported,
   unknown;

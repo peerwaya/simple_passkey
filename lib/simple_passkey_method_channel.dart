@@ -23,9 +23,9 @@ class MethodChannelSimplePasskey extends SimplePasskeyPlatform {
     try {
       final response =
           await methodChannel.invokeMethod<String>('createPassKey', {
-        json: json,
-        clientDataHash: clientDataHash,
-        preferImmediatelyAvailableCredentials:
+        'json': json,
+        'clientDataHash': clientDataHash,
+        'preferImmediatelyAvailableCredentials':
             preferImmediatelyAvailableCredentials
       });
       return response!;
@@ -42,9 +42,9 @@ class MethodChannelSimplePasskey extends SimplePasskeyPlatform {
       bool preferImmediatelyAvailableCredentials = true}) async {
     try {
       final response = await methodChannel.invokeMethod<String>('getPassKey', {
-        json: json,
-        clientDataHash: clientDataHash,
-        preferImmediatelyAvailableCredentials:
+        'json': json,
+        'clientDataHash': clientDataHash,
+        'preferImmediatelyAvailableCredentials':
             preferImmediatelyAvailableCredentials
       });
       return response!;

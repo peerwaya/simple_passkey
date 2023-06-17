@@ -12,8 +12,7 @@ import UIKit
 import AuthenticationServices
 import os
 
-@available(iOS 15.0, *)
-public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextProviding, ASAuthorizationControllerDelegate {
+class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextProviding, ASAuthorizationControllerDelegate {
     
     
     var isPerformingModalReqest = false;
@@ -21,26 +20,28 @@ public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextPro
     var result: FlutterResult?;
 
     
-    public func createPassKey(json: String, preferImmediatelyAvailableCredentials: Bool, result: @escaping FlutterResult) {
+    @available(iOS 15.0, *)
+    func createPassKey(json: String, preferImmediatelyAvailableCredentials: Bool, result: @escaping FlutterResult) {
+        let logger = Logger()
         if let jsonData = json.data(using: .utf8) {
             do {
                 self.result = result;
                 let decoder = JSONDecoder()
                 let options = try decoder.decode(PublicKeyCredentialCreationOptions.self, from: jsonData);
-                guard let challenge = Data(base64Encoded: options.challenge) else {
+                guard let challenge = base64URLToData(options.challenge) else {
                     result(FlutterError(
                         code: "invalid_argument",
                         message: "challenge: \(options.challenge)", details: nil));
                     return;
                 };
-                guard let userId = Data(base64Encoded: options.user.id) else {
+                guard let userId = base64URLToData(options.user.id) else {
                     result(FlutterError(
                         code: "invalid_argument",
                         message: "userId: \(options.user.id)", details: nil));
                     return;
                 };
                 let publicKeyCredentialProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rp.id)
-                let registrationRequest = publicKeyCredentialProvider.createCredentialRegistrationRequest(challenge: challenge,                                   name: options.user.displayName, userID: userId)
+                let registrationRequest = publicKeyCredentialProvider.createCredentialRegistrationRequest(challenge: challenge,                                   name: options.user.name, userID: userId)
                 if let attestation = options.attestation {
                     registrationRequest.attestationPreference = ASAuthorizationPublicKeyCredentialAttestationKind.init(rawValue: attestation.rawValue)
                 }
@@ -70,16 +71,24 @@ public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextPro
                     message: "\(error)", details: nil));
                 self.result = nil;
             }
+        } else {
+            result(FlutterError(
+                code: "invalid_argument",
+                message: "failed to convert to data \(json)", details: nil));
+            self.result = nil;
         }
     }
     
-    public func getPassKey(json: String, preferImmediatelyAvailableCredentials: Bool, result: @escaping FlutterResult) {
+    @available(iOS 15.0, *)
+    func getPassKey(json: String, preferImmediatelyAvailableCredentials: Bool, result: @escaping FlutterResult) {
+        let logger = Logger()
+        logger.log("getPassKey: \(json)")
         if let jsonData = json.data(using: .utf8) {
             do {
                 self.result = result;
                 let decoder = JSONDecoder()
                 let options = try decoder.decode(PublicKeyCredentialRequestOptions.self, from: jsonData);
-                guard let challenge = Data(base64Encoded: options.challenge) else {
+                guard let challenge = base64URLToData(options.challenge) else {
                     result(FlutterError(
                         code: "invalid_argument",
                         message: "challenge: \(options.challenge)", details: nil));
@@ -87,6 +96,15 @@ public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextPro
                 };
                 let publicKeyCredentialProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId ?? "")
                 let assertionRequest = publicKeyCredentialProvider.createCredentialAssertionRequest(challenge: challenge)
+                
+                if let allowedCredentials = options.allowCredentials?.map({ credentialDescriptor in
+                    ASAuthorizationPlatformPublicKeyCredentialDescriptor.init(credentialID: base64URLToData(credentialDescriptor.id) ?? Data())
+                }) {
+                    assertionRequest.allowedCredentials = allowedCredentials;
+                }
+                if let userVerification = options.userVerification {
+                    assertionRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference.init(rawValue: userVerification.rawValue)
+                }
                 let authController = ASAuthorizationController(authorizationRequests: [ assertionRequest ] )
                 authController.delegate = self
                 authController.presentationContextProvider = self
@@ -104,87 +122,98 @@ public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextPro
                 }
                 isPerformingModalReqest = true
             } catch {
-                print("Error decoding JSON: \(error)")
                 result(FlutterError(
                     code: "invalid_argument",
                     message: "\(error)", details: nil));
                 self.result = nil;
             }
+        } else {
+            result(FlutterError(
+                code: "invalid_argument",
+                message: "failed to convert to data \(json)", details: nil));
+            self.result = nil;
         }
     }
     
-    public func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        let logger = Logger()
-        let encoder = JSONEncoder()
-        if (self.result == nil) {
-            return;
-        }
+    @available(iOS 13.0, *)
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         do {
-            switch authorization.credential {
-            case let credentialRegistration as ASAuthorizationPlatformPublicKeyCredentialRegistration:
-                logger.log("A new passkey was registered: \(credentialRegistration)")
-                // Verify the attestationObject and clientDataJSON with your service.
-                // The attestationObject contains the user's new public key to store and use for subsequent sign-ins.
-                let attestationObject = credentialRegistration.rawAttestationObject
-                let clientDataJSON = credentialRegistration.rawClientDataJSON
-                let registrationResponse = RegistrationResponseJSON(
-                    id: credentialRegistration.credentialID.base64EncodedString(),
-                    rawId: credentialRegistration.credentialID.base64EncodedString(),
-                    response: AuthenticatorAttestationResponseJSON(
-                        clientDataJSON: clientDataJSON.base64EncodedString(),
-                        attestationObject: attestationObject!.base64EncodedString(),
-                        transports: []
-                    ),
-                    authenticatorAttachment: nil,
-                    clientExtensionResults: AuthenticationExtensionsClientOutputsJSON(),
-                    type: "public-key"
-                );
-                // After the server verifies the registration and creates the user account, sign in the user with the new account.
-                encoder.outputFormatting = .prettyPrinted
-                let jsonData = try encoder.encode(registrationResponse)
-                if let jsonString = String(data: jsonData, encoding: .utf8) {
-                    self.result!(jsonString);
-                } else {
-                    self.result!(FlutterError(
-                        code: "credential_dom_exception",
-                        message: "invalid json data \(jsonData)", details: nil));
+            if #available(iOS 15.0, *) {
+                let logger = Logger()
+                let encoder = JSONEncoder()
+                if (self.result == nil) {
+                    return;
                 }
-            case let credentialAssertion as ASAuthorizationPlatformPublicKeyCredentialAssertion:
-                logger.log("A passkey was used to sign in: \(credentialAssertion)")
-                // Verify the below signature and clientDataJSON with your service for the given userID.
-                // let signature = credentialAssertion.signature
-                // let clientDataJSON = credentialAssertion.rawClientDataJSON
-                // let userID = credentialAssertion.userID
-                
-                let authenticatorData = credentialAssertion.rawAuthenticatorData;
-                let clientDataJSON = credentialAssertion.rawClientDataJSON
-                let authenticationResponse = AuthenticationResponseJSON(
-                    id: credentialAssertion.credentialID.base64EncodedString(),
-                    rawId: credentialAssertion.credentialID.base64EncodedString(),
-                    response: AuthenticatorAssertionResponseJSON(
-                        clientDataJSON: clientDataJSON.base64EncodedString(),
-                        authenticatorData: authenticatorData!.base64EncodedString(),
-                        signature: credentialAssertion.signature.base64EncodedString(),
-                        userHandle: credentialAssertion.userID.base64EncodedString()
-                    ),
-                    authenticatorAttachment: nil,
-                    clientExtensionResults: AuthenticationExtensionsClientOutputsJSON(),
-                    type: "public-key"
-                );
-                // After the server verifies the registration and creates the user account, sign in the user with the new account.
-                encoder.outputFormatting = .prettyPrinted
-                let jsonData = try encoder.encode(authenticationResponse)
-                if let jsonString = String(data: jsonData, encoding: .utf8) {
-                    self.result!(jsonString);
-                } else {
+                switch authorization.credential {
+                case let credentialRegistration as ASAuthorizationPlatformPublicKeyCredentialRegistration:
+                    logger.log("A new passkey was registered: \(credentialRegistration)")
+                    // Verify the attestationObject and clientDataJSON with your service.
+                    // The attestationObject contains the user's new public key to store and use for subsequent sign-ins.
+                    let attestationObject = credentialRegistration.rawAttestationObject
+                    let clientDataJSON = credentialRegistration.rawClientDataJSON
+                    let registrationResponse = RegistrationResponseJSON(
+                        id: base64URLEncode(credentialRegistration.credentialID),
+                        rawId: base64URLEncode(credentialRegistration.credentialID),
+                        response: AuthenticatorAttestationResponseJSON(
+                            clientDataJSON: base64URLEncode(clientDataJSON),
+                            attestationObject: base64URLEncode(attestationObject!),
+                            transports: []
+                        ),
+                        authenticatorAttachment: nil,
+                        clientExtensionResults: AuthenticationExtensionsClientOutputsJSON(),
+                        type: "public-key"
+                    );
+                    // After the server verifies the registration and creates the user account, sign in the user with the new account.
+                    encoder.outputFormatting = .prettyPrinted
+                    let jsonData = try encoder.encode(registrationResponse)
+                    if let jsonString = String(data: jsonData, encoding: .utf8) {
+                        self.result!(jsonString);
+                    } else {
+                        self.result!(FlutterError(
+                            code: "credential_dom_exception",
+                            message: "invalid json data \(jsonData)", details: nil));
+                    }
+                case let credentialAssertion as ASAuthorizationPlatformPublicKeyCredentialAssertion:
+                    logger.log("A passkey was used to sign in: \(credentialAssertion)")
+                    // Verify the below signature and clientDataJSON with your service for the given userID.
+                    // let signature = credentialAssertion.signature
+                    // let clientDataJSON = credentialAssertion.rawClientDataJSON
+                    // let userID = credentialAssertion.userID
+                    
+                    let authenticatorData = credentialAssertion.rawAuthenticatorData;
+                    let clientDataJSON = credentialAssertion.rawClientDataJSON
+                    let authenticationResponse = AuthenticationResponseJSON(
+                        id: base64URLEncode(credentialAssertion.credentialID),
+                        rawId: base64URLEncode(credentialAssertion.credentialID),
+                        response: AuthenticatorAssertionResponseJSON(
+                            clientDataJSON: base64URLEncode(clientDataJSON),
+                            authenticatorData: authenticatorData != nil ? base64URLEncode(authenticatorData!) : nil,
+                            signature: base64URLEncode(credentialAssertion.signature),
+                            userHandle: base64URLEncode(credentialAssertion.userID)
+                        ),
+                        authenticatorAttachment: nil,
+                        clientExtensionResults: AuthenticationExtensionsClientOutputsJSON(),
+                        type: "public-key"
+                    );
+                    // After the server verifies the registration and creates the user account, sign in the user with the new account.
+                    encoder.outputFormatting = .prettyPrinted
+                    let jsonData = try encoder.encode(authenticationResponse)
+                    if let jsonString = String(data: jsonData, encoding: .utf8) {
+                        self.result!(jsonString);
+                    } else {
+                        self.result!(FlutterError(
+                            code: "credential_dom_exception",
+                            message: "invalid json data \(jsonData)", details: nil));
+                    }
+                default:
                     self.result!(FlutterError(
-                        code: "credential_dom_exception",
-                        message: "invalid json data \(jsonData)", details: nil));
+                        code: "invalid_credential_type",
+                        message: "Received unknown authorization type.", details: nil));
                 }
-            default:
+            } else {
                 self.result!(FlutterError(
-                    code: "invalid_credential_type",
-                    message: "Received unknown authorization type.", details: nil));
+                    code: "invalid_argument",
+                    message: "unsupported version", details: nil));
             }
         } catch {
             self.result!(FlutterError(
@@ -195,47 +224,75 @@ public class WebAuthn: NSObject, ASAuthorizationControllerPresentationContextPro
         self.result = nil;
     }
     
-    public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        let logger = Logger()
-        if (self.result == nil) {
-            return;
-        }
-        guard let authorizationError = error as? ASAuthorizationError else {
-            isPerformingModalReqest = false
-            logger.error("Unexpected authorization error: \(error.localizedDescription)")
-            self.result!(FlutterError(
+    @available(iOS 13.0, *)
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        if #available(iOS 15.0, *) {
+            let logger = Logger()
+            logger.log("Start Error.")
+            guard let authorizationError = error as? ASAuthorizationError else {
+                isPerformingModalReqest = false
+                logger.error("Unexpected authorization error: \(error.localizedDescription)")
+                self.result!(FlutterError(
                     code: "unknown",
                     message: "\(error)", details: nil));
-            return
-        }
-
-        if authorizationError.code == .canceled {
-            // Either the system doesn't find any credentials and the request ends silently, or the user cancels the request.
-            // This is a good time to show a traditional login form, or ask the user to create an account.
-            logger.log("Request canceled.")
-            if isPerformingModalReqest {
-                self.result!(FlutterError(
+                return
+            }
+            if authorizationError.code == .canceled {
+                // Either the system doesn't find any credentials and the request ends silently, or the user cancels the request.
+                // This is a good time to show a traditional login form, or ask the user to create an account.
+                logger.log("Request canceled.")
+                if isPerformingModalReqest {
+                    self.result!(FlutterError(
                         code: "user_canceled",
                         message: "\(error)", details: nil));
-            } else {
-                self.result!(FlutterError(
+                } else {
+                    self.result!(FlutterError(
                         code: "platform_canceled",
                         message: "\(error)", details: nil));
-            }
-        } else {
-            // Another ASAuthorization error.
-            // Note: The userInfo dictionary contains useful information.
-            logger.error("Error: \((error as NSError).userInfo)")
-            self.result!(FlutterError(
+                }
+            } else {
+                // Another ASAuthorization error.
+                // Note: The userInfo dictionary contains useful information.
+                logger.error("Error: \((error as NSError).userInfo)")
+                self.result!(FlutterError(
                     code: "unknown",
                     message: "\(error)", details: nil));
+            }
+        } else {
+            self.result!(FlutterError(
+                code: "unknown",
+                message: "unsupported version", details: nil));
         }
-        
         self.result = nil;
         isPerformingModalReqest = false
     }
 
-    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    @available(iOS 13.0, *)
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         return UIApplication.shared.windows.first!
+    }
+    
+    func base64URLEncode(_ data: Data) -> String {
+        let base64 = data.base64EncodedString()
+        let base64URL = base64
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        
+        return base64URL
+    }
+    
+    func base64URLToData(_ base64URLString: String) -> Data? {
+        var base64 = base64URLString
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        
+        // Add padding characters if necessary
+        let paddingLength = 4 - (base64.count % 4)
+        if paddingLength < 4 {
+            base64.append(String(repeating: "=", count: paddingLength))
+        }
+        
+        return Data(base64Encoded: base64)
     }
 }

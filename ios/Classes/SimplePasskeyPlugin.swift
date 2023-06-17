@@ -10,6 +10,7 @@ public class SimplePasskeyPlugin: NSObject, FlutterPlugin {
         let instance = SimplePasskeyPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
+    let webAuthn = WebAuthn();
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
@@ -24,7 +25,6 @@ public class SimplePasskeyPlugin: NSObject, FlutterPlugin {
                 let args = call.arguments as! Dictionary<String, Any>;
                 let jsonString : String  =  args["json"]! as! String;
                 let preferImmediatelyAvailableCredentials : Bool?  =  args["preferImmediatelyAvailableCredentials"] as? Bool;
-                let webAuthn = WebAuthn();
                 webAuthn.createPassKey(json: jsonString, preferImmediatelyAvailableCredentials: preferImmediatelyAvailableCredentials ?? false, result: result)
             } else {
                 result(FlutterError(
@@ -36,7 +36,6 @@ public class SimplePasskeyPlugin: NSObject, FlutterPlugin {
                 let args = call.arguments as! Dictionary<String, Any>;
                 let jsonString : String  =  args["json"]! as! String;
                 let preferImmediatelyAvailableCredentials : Bool?  =  args["preferImmediatelyAvailableCredentials"] as? Bool;
-                let webAuthn = WebAuthn();
                 webAuthn.getPassKey(json: jsonString, preferImmediatelyAvailableCredentials: preferImmediatelyAvailableCredentials ?? false, result: result)
             } else {
                 result(FlutterError(
