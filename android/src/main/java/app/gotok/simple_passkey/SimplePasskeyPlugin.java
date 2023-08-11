@@ -80,14 +80,14 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
         if (call.method.equals("createPassKey")) {
             String json = (String) call.argument("json");
-            Log.d("PASSKEY", json);
             Boolean preferImmediatelyAvailableCredentials = (Boolean) call.argument("preferImmediatelyAvailableCredentials");
             byte[] clientDataHash = (byte[]) call.argument("clientDataHash");
-            this.createPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials != null ? preferImmediatelyAvailableCredentials : false, result);
+            this.createPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials != null ? preferImmediatelyAvailableCredentials : true, result);
         } else if (call.method.equals("getPassKey")) {
             String json = (String) call.argument("json");
+            Boolean preferImmediatelyAvailableCredentials = (Boolean) call.argument("preferImmediatelyAvailableCredentials");
             byte[] clientDataHash = (byte[]) call.argument("clientDataHash");
-            this.getPasskey(json, clientDataHash, result);
+            this.getPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials, result);
         } else if (call.method.equals("isSupported")) {
             result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P);
         } else {
@@ -148,13 +148,16 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
         }
     }
 
-    public void getPasskey(String requestJson, @Nullable byte[] clientDataHash, @NonNull Result result) {
+    public void getPasskey(String requestJson, @Nullable byte[] clientDataHash, boolean preferImmediatelyAvailableCredentials,  @NonNull Result result) {
         CredentialManager credentialManager = CredentialManager.create(activity);
         GetPublicKeyCredentialOption getPublicKeyCredentialOption =
                 new GetPublicKeyCredentialOption(requestJson, clientDataHash);
         GetCredentialRequest getCredRequest = new GetCredentialRequest.Builder()
                 .addCredentialOption(getPublicKeyCredentialOption)
+                .setPreferImmediatelyAvailableCredentials(preferImmediatelyAvailableCredentials)
                 .build();
+
+        Log.d("preferImmediatelyAvailableCredentials", ""+preferImmediatelyAvailableCredentials);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             credentialManager.getCredentialAsync(
                     activity,
