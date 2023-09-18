@@ -156,8 +156,6 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
                 .addCredentialOption(getPublicKeyCredentialOption)
                 .setPreferImmediatelyAvailableCredentials(preferImmediatelyAvailableCredentials)
                 .build();
-
-        Log.d("preferImmediatelyAvailableCredentials", ""+preferImmediatelyAvailableCredentials);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             credentialManager.getCredentialAsync(
                     activity,
