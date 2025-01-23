@@ -87,7 +87,7 @@ public class SimplePasskeyPlugin implements FlutterPlugin, MethodCallHandler, Ac
             String json = (String) call.argument("json");
             Boolean preferImmediatelyAvailableCredentials = (Boolean) call.argument("preferImmediatelyAvailableCredentials");
             byte[] clientDataHash = (byte[]) call.argument("clientDataHash");
-            this.getPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials, result);
+            this.getPasskey(json, clientDataHash, preferImmediatelyAvailableCredentials != null ? preferImmediatelyAvailableCredentials : true, result);
         } else if (call.method.equals("isSupported")) {
             result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P);
         } else {
